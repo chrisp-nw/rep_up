@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
-<title>Pyramid</title>
+<title>Rep Up</title>
 <meta name="theme-color" content="#1e1e2e" />
 
 <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet"/>
@@ -336,7 +336,7 @@
 </head>
 <body>
 
-<h1 class="app-title">Pyramid</h1>
+<h1 class="app-title">Rep Up</h1>
 
 <!-- MAIN TIMER CARD -->
 <div class="card" style="text-align:center;">
@@ -446,11 +446,11 @@
 <!-- CONGRATS MODAL -->
 <div class="modal-overlay congrats-overlay" id="congratsModal">
   <div class="modal">
-    <div style="font-size:3.5rem;margin-bottom:6px;">🏆</div>
+    <div style="font-size:3.2rem;margin-bottom:4px;letter-spacing:4px;">🎉🥳🎉</div>
     <h3 style="font-size:1.4rem;color:#ffd54f;margin-bottom:10px;letter-spacing:1px;">Workout Complete!</h3>
     <p id="congratsMsg" style="font-size:1rem;color:var(--text);margin-bottom:8px;line-height:1.6;"></p>
-    <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:22px;">Every rep counts — great session! 🎉</p>
-    <button class="modal-btn modal-btn-ok" style="width:100%;height:52px;font-size:1.1rem;" onclick="closeCongratsModal()">Awesome! 💪</button>
+    <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:22px;">Every rep counts — keep crushing it! 💪</p>
+    <button class="modal-btn modal-btn-ok" style="width:100%;height:52px;font-size:1.1rem;" onclick="closeCongratsModal()">Awesome! 🎊</button>
   </div>
 </div>
 
@@ -527,30 +527,53 @@ function beep(freq, dur, vol=0.4) {
 function beepShort() { beep(880, 150, 0.8); }
 function beepLong()  { beep(660, 600, 0.9); }
 function beepStart() { beep(1046, 300, 0.95); setTimeout(()=>beep(1318,400,0.95),320); }
-function beepApplause() {
+function beepCelebrate() {
   try {
     const ctx = getAudioCtx();
     if(ctx.state === 'suspended') ctx.resume();
-    const dur = 2.8, sr = ctx.sampleRate;
-    const buf = ctx.createBuffer(1, sr*dur, sr);
-    const d = buf.getChannelData(0);
-    for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1);
-    const src = ctx.createBufferSource(); src.buffer = buf;
-    const filt = ctx.createBiquadFilter();
-    filt.type='bandpass'; filt.frequency.value=1400; filt.Q.value=0.6;
-    const gain = ctx.createGain();
-    // Clapping waves
-    [0,.3,.6,.9,1.2,1.5,1.8,2.1].forEach(t=>{
-      gain.gain.linearRampToValueAtTime(0.85, ctx.currentTime+t+0.1);
-      gain.gain.linearRampToValueAtTime(0.25, ctx.currentTime+t+0.28);
+    const t = ctx.currentTime;
+
+    // Confetti pop: short high-pass noise burst
+    const popBuf = ctx.createBuffer(1, ctx.sampleRate * 0.25, ctx.sampleRate);
+    const pd = popBuf.getChannelData(0);
+    for(let i=0;i<pd.length;i++) pd[i]=Math.random()*2-1;
+    const popSrc = ctx.createBufferSource(); popSrc.buffer = popBuf;
+    const popFilt = ctx.createBiquadFilter(); popFilt.type='highpass'; popFilt.frequency.value=4000;
+    const popGain = ctx.createGain();
+    popGain.gain.setValueAtTime(0.7,t); popGain.gain.exponentialRampToValueAtTime(0.001,t+0.25);
+    popSrc.connect(popFilt); popFilt.connect(popGain); popGain.connect(ctx.destination);
+    popSrc.start(t); popSrc.stop(t+0.25);
+
+    // Android-style party fanfare: C5-E5-G5-C6 ascending arpeggio
+    [[523,'triangle',0],[659,'triangle',0.11],[784,'triangle',0.22],[1047,'sine',0.33]].forEach(([freq,type,delay])=>{
+      const osc=ctx.createOscillator(), g=ctx.createGain();
+      osc.connect(g); g.connect(ctx.destination);
+      osc.frequency.value=freq; osc.type=type;
+      g.gain.setValueAtTime(0.9,t+delay);
+      g.gain.exponentialRampToValueAtTime(0.001,t+delay+0.4);
+      osc.start(t+delay); osc.stop(t+delay+0.45);
     });
-    gain.gain.linearRampToValueAtTime(0.001, ctx.currentTime+dur);
-    src.connect(filt); filt.connect(gain); gain.connect(ctx.destination);
-    src.start(); src.stop(ctx.currentTime+dur);
-    // Fanfare on top
-    setTimeout(()=>beepStart(),300);
-    setTimeout(()=>beepStart(),900);
-    setTimeout(()=>{beep(1568,600,0.95);},1600);
+
+    // Second ascending burst after 0.7s (higher octave)
+    setTimeout(()=>{
+      const t2=ctx.currentTime;
+      [[784,'sine',0],[988,'sine',0.09],[1175,'sine',0.18],[1568,'sine',0.27]].forEach(([freq,type,delay])=>{
+        const osc=ctx.createOscillator(), g=ctx.createGain();
+        osc.connect(g); g.connect(ctx.destination);
+        osc.frequency.value=freq; osc.type=type;
+        g.gain.setValueAtTime(0.85,t2+delay);
+        g.gain.exponentialRampToValueAtTime(0.001,t2+delay+0.35);
+        osc.start(t2+delay); osc.stop(t2+delay+0.4);
+      });
+      // Second confetti pop
+      const p2=ctx.createBuffer(1,ctx.sampleRate*0.2,ctx.sampleRate);
+      const p2d=p2.getChannelData(0); for(let i=0;i<p2d.length;i++) p2d[i]=Math.random()*2-1;
+      const p2s=ctx.createBufferSource(); p2s.buffer=p2;
+      const p2f=ctx.createBiquadFilter(); p2f.type='highpass'; p2f.frequency.value=5000;
+      const p2g=ctx.createGain(); p2g.gain.setValueAtTime(0.5,t2); p2g.gain.exponentialRampToValueAtTime(0.001,t2+0.2);
+      p2s.connect(p2f); p2f.connect(p2g); p2g.connect(ctx.destination);
+      p2s.start(t2); p2s.stop(t2+0.2);
+    }, 700);
   } catch(e) {}
 }
 
@@ -727,13 +750,13 @@ function updateActionBtns() {
   const upBtn = document.getElementById('btnUp');
 
   if(state.lastSetPending) {
-    // Timer expired mid-exercise: offer to log last set
-    downBtn.disabled = true;
+    // Timer expired mid-exercise: offer to log or skip last set
+    downBtn.disabled = false;
     upBtn.disabled = false;
     upIcon.textContent = 'add_task';
-    upLabel.textContent = 'Log it!';
-    downIcon.textContent = 'arrow_downward';
-    downLabel.textContent = 'Down';
+    upLabel.textContent = 'Add last';
+    downIcon.textContent = 'check_circle';
+    downLabel.textContent = 'Done';
   } else {
     downBtn.disabled = false;
     upBtn.disabled = false;
@@ -781,7 +804,7 @@ function tick() {
   if(!state.running) return;
 
   // Workout timer only counts down after init phase
-  if(state.phase !== 'init') {
+  if(state.phase !== 'init' && !state.lastSetPending) {
     state.workoutRemain -= dt;
   }
   if(state.workoutRemain <= 0) {
@@ -796,7 +819,10 @@ function tick() {
       state.phase = 'idle';
       stopTick();
       releaseWakeLock();
-      beepLong(); beepLong();
+      beepCelebrate();
+      const el = document.getElementById('congratsMsg');
+      el.textContent = state.totalReps + " total reps. Time's up — well done!";
+      document.getElementById('congratsModal').classList.add('show');
       renderAll();
       return;
     }
@@ -894,7 +920,7 @@ function finishExercise() {
 }
 
 function goDown() {
-  if(state.lastSetPending) return;
+  if(state.lastSetPending) { skipLastSet(); return; }
   if(state.phase === 'exercise' && state.running) {
     state.nextRepsDelta = state.currentReps <= 1 ? 0 : -1;
     finishExercise();
@@ -922,9 +948,22 @@ function addLastSet() {
   state.phase = 'idle';
   stopTick();
   releaseWakeLock();
-  beepApplause();
+  beepCelebrate();
   const el = document.getElementById('congratsMsg');
-  el.textContent = state.totalReps + ' total reps — you even powered past the clock!';
+  el.textContent = state.totalReps + ' total reps — including the last set. You powered past the clock! 🔥';
+  document.getElementById('congratsModal').classList.add('show');
+  renderAll();
+}
+
+function skipLastSet() {
+  state.lastSetPending = false;
+  state.running = false;
+  state.phase = 'idle';
+  stopTick();
+  releaseWakeLock();
+  beepCelebrate();
+  const el = document.getElementById('congratsMsg');
+  el.textContent = state.totalReps + ' total reps. You gave it everything — great session!';
   document.getElementById('congratsModal').classList.add('show');
   renderAll();
 }
