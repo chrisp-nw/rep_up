@@ -336,6 +336,11 @@
   .break-countdown.execution { color: var(--danger); }
   .modal-overlay.congrats-overlay .modal { border: 2px solid gold; }
 </style>
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js');
+}
+</script>  
 </head>
 <body>
 
