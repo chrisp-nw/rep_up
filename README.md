@@ -1,6 +1,6 @@
 # Rep Up User Manual
 
-Rep Up is a timer app for ladder-style workouts.
+Rep Up is a timer app for ladder-style workouts, which means the numer of reps increase set by set.
 
 ## Ladder Workout Principle (Short)
 
