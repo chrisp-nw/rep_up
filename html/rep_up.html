@@ -506,6 +506,7 @@ const state = {
   autoTimerActive: false,
   lastSetPending: false,
   exerciseElapsed: 0,
+  initReachedZeroAt: 0,
   breakReachedZeroAt: 0,
 };
 
@@ -836,11 +837,18 @@ function tick() {
   if(state.phase === 'init') {
     state.initCountdown -= dt;
     if(state.initCountdown <= 0) {
-      state.phase = 'exercise';
-      state.exerciseStartTime = performance.now();
-      state.autoTimerActive = false;
-      lastBreakBeep = -1;
-      beepStart();
+      if(!state.initReachedZeroAt) {
+        // Keep 00 visible for one full second before starting exercise.
+        state.initCountdown = 0;
+        state.initReachedZeroAt = now;
+      } else if(now - state.initReachedZeroAt >= 1000) {
+        state.phase = 'exercise';
+        state.exerciseStartTime = performance.now();
+        state.autoTimerActive = false;
+        state.initReachedZeroAt = 0;
+        lastBreakBeep = -1;
+        beepStart();
+      }
     } else {
       // beep last 3s of init countdown
       const s = Math.ceil(state.initCountdown);
@@ -883,6 +891,7 @@ function toggleStartStop() {
       state.totalReps = 0;
       state.nextRepsDelta = 0;
       state.initCountdown = 10;
+      state.initReachedZeroAt = 0;
       state.phase = 'init';
       lastBreakBeep = 10;
     }
@@ -999,6 +1008,7 @@ function doReset() {
   state.breakRemain = 0;
   state.breakReachedZeroAt = 0;
   state.initCountdown = 10;
+  state.initReachedZeroAt = 0;
   state.autoTimerActive = false;
   state.lastSetPending = false;
   lastBreakBeep = -1;
