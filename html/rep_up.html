@@ -733,13 +733,8 @@ function updateStartBtn() {
   const lbl = document.getElementById('startLabel');
   if(state.running) {
     btn.classList.add('active');
-    if(state.phase === 'exercise') {
-      icon.textContent = 'check';
-      lbl.textContent = 'Done';
-    } else {
-      icon.textContent = 'pause';
-      lbl.textContent = 'Pause';
-    }
+    icon.textContent = 'pause';
+    lbl.textContent = 'Pause';
   } else {
     btn.classList.remove('active');
     icon.textContent = 'play_arrow';
@@ -887,13 +882,8 @@ function toggleStartStop() {
     startTick();
     requestWakeLock();
   } else {
-    // Pause — only allowed during break
-    if(state.phase === 'exercise') {
-      // pressing pause/stop during exercise = set done, go to break
-      finishExercise();
-    } else {
-      state.running = false;
-    }
+    // Pause from any active phase
+    state.running = false;
   }
   renderAll();
 }
@@ -911,12 +901,9 @@ function finishExercise() {
   if(state.breakMode === 'fix') {
     breakTime = state.baseBreak * state.currentReps;
   } else {
-    // auto: time taken for this set (only if timer was started from a real break)
-    if(state.autoTimerActive) {
-      breakTime = (performance.now() - state.exerciseStartTime) / 1000;
-    } else {
-      breakTime = state.currentReps * 3; // fallback for first round
-    }
+    // auto: mirror the duration of the set that was just completed
+    const elapsed = (performance.now() - state.exerciseStartTime) / 1000;
+    breakTime = Number.isFinite(elapsed) && elapsed > 0 ? elapsed : state.currentReps * 3;
   }
   state.breakRemain = Math.max(1, breakTime);
   lastBreakBeep = -1;
