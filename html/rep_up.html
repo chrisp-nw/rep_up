@@ -359,8 +359,8 @@ if ('serviceWorker' in navigator) {
 <div class="card">
   <div class="card-header" style="text-align:center;">Break</div>
   <div class="toggle-row">
-    <button class="toggle-btn active" id="btnFix" onclick="setBreakMode('fix')">Fix</button>
-    <button class="toggle-btn" id="btnAuto" onclick="setBreakMode('auto')">Auto</button>
+    <button class="toggle-btn active" id="btnAuto" onclick="setBreakMode('auto')">Auto</button>
+    <button class="toggle-btn" id="btnFix" onclick="setBreakMode('fix')">Fix</button>
   </div>
 
   <div id="fixSettings">
@@ -491,7 +491,7 @@ document.addEventListener('visibilitychange', () => {
 const state = {
   workoutTotal: 7 * 60 + 30,
   workoutRemain: 7 * 60 + 30,
-  breakMode: 'fix',
+  breakMode: 'auto',
   baseBreak: 5,
   breakRemain: 0,
   currentReps: 1,
@@ -506,6 +506,7 @@ const state = {
   autoTimerActive: false,
   lastSetPending: false,
   exerciseElapsed: 0,
+  breakReachedZeroAt: 0,
 };
 
 let mainTick = null;
@@ -852,12 +853,19 @@ function tick() {
     const s = Math.ceil(state.breakRemain);
     if(s <= 3 && s >= 1 && s !== lastBreakBeep) { lastBreakBeep = s; beepShort(); }
     if(state.breakRemain <= 0) {
-      state.breakRemain = 0;
-      state.phase = 'exercise';
-      state.exerciseStartTime = performance.now();
-      state.autoTimerActive = true;
-      lastBreakBeep = -1;
-      beepStart();
+      if(!state.breakReachedZeroAt) {
+        // Keep 00 visible for one full second before starting the next set.
+        state.breakRemain = 0;
+        state.breakReachedZeroAt = now;
+      } else if(now - state.breakReachedZeroAt >= 1000) {
+        state.breakRemain = 0;
+        state.phase = 'exercise';
+        state.exerciseStartTime = performance.now();
+        state.autoTimerActive = true;
+        state.breakReachedZeroAt = 0;
+        lastBreakBeep = -1;
+        beepStart();
+      }
     }
   }
 
@@ -906,6 +914,7 @@ function finishExercise() {
     breakTime = Number.isFinite(elapsed) && elapsed > 0 ? elapsed : state.currentReps * 3;
   }
   state.breakRemain = Math.max(1, breakTime);
+  state.breakReachedZeroAt = 0;
   lastBreakBeep = -1;
 
   // Apply direction change
@@ -988,6 +997,7 @@ function doReset() {
   state.totalReps = 0;
   state.nextRepsDelta = 0;
   state.breakRemain = 0;
+  state.breakReachedZeroAt = 0;
   state.initCountdown = 10;
   state.autoTimerActive = false;
   state.lastSetPending = false;
@@ -997,7 +1007,7 @@ function doReset() {
 }
 
 // Init UI
-setBreakMode('fix');
+setBreakMode('auto');
 renderAll();
 </script>
 </body>
