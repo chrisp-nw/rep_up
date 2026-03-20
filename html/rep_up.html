@@ -686,6 +686,10 @@ function fmtMSS(s) {
   s = Math.max(0, Math.ceil(s));
   return String(Math.floor(s/60)).padStart(2,'0') + ':' + String(s%60).padStart(2,'0');
 }
+function fmtElapsed(s) {
+  s = Math.max(0, Math.floor(s));
+  return String(Math.floor(s/60)).padStart(2,'0') + ':' + String(s%60).padStart(2,'0');
+}
 function fmtTimer(s) {
   s = Math.max(0, Math.ceil(s));
   const m = Math.floor(s/60), sec = s%60;
@@ -712,8 +716,9 @@ function updateBreakDisplay() {
     el.textContent = '00:' + String(Math.ceil(state.initCountdown)).padStart(2,'0');
     el.classList.add('warning'); lbl.textContent = 'GET READY';
   } else if(state.phase === 'exercise') {
-    const elapsed = (performance.now() - state.exerciseStartTime) / 1000;
-    el.textContent = fmtMSS(elapsed); el.classList.add('execution'); lbl.textContent = 'EXECUTION';
+    const runningElapsed = state.running ? (performance.now() - state.exerciseStartTime) / 1000 : 0;
+    const elapsed = state.exerciseElapsed + runningElapsed;
+    el.textContent = fmtElapsed(elapsed); el.classList.add('execution'); lbl.textContent = 'EXECUTION';
   } else if(state.phase === 'break') {
     el.textContent = fmtMSS(state.breakRemain);
     if(state.breakRemain <= 3) { el.classList.add('warning'); }
@@ -774,8 +779,19 @@ function updateActionBtns() {
   } else {
     downBtn.disabled = false;
     upBtn.disabled = false;
-    upIcon.textContent = 'arrow_upward';
-    upLabel.textContent = 'Up';
+    if(state.phase === 'break' || state.phase === 'init') {
+      upIcon.textContent = 'skip_next';
+      upLabel.textContent = 'Next';
+      // Skip is only allowed before the final 3-second countdown starts.
+      if(state.phase === 'break') {
+        upBtn.disabled = state.breakRemain <= 3;
+      } else {
+        upBtn.disabled = state.initCountdown <= 3;
+      }
+    } else {
+      upIcon.textContent = 'arrow_upward';
+      upLabel.textContent = 'Up';
+    }
     if(state.phase === 'exercise' && state.running && state.currentReps <= 1) {
       downIcon.textContent = 'arrow_forward';
       downLabel.textContent = 'Keep';
@@ -808,7 +824,13 @@ function stopTick() {
   lastTick = null;
 }
 
-let lastBreakBeep = -1;
+function beepCountdownBoundaries(prevRemain, nextRemain) {
+  for (let sec = 3; sec >= 1; sec--) {
+    if (prevRemain > sec && nextRemain <= sec) {
+      beepShort();
+    }
+  }
+}
 
 function tick() {
   const now = performance.now();
@@ -844,45 +866,32 @@ function tick() {
   }
 
   if(state.phase === 'init') {
+    const prevInit = state.initCountdown;
     state.initCountdown -= dt;
+    beepCountdownBoundaries(prevInit, state.initCountdown);
     if(state.initCountdown <= 0) {
-      if(!state.initReachedZeroAt) {
-        // Keep 00 visible for one full second before starting exercise.
-        state.initCountdown = 0;
-        state.initReachedZeroAt = now;
-      } else if(now - state.initReachedZeroAt >= 1000) {
-        state.phase = 'exercise';
-        state.exerciseStartTime = performance.now();
-        state.autoTimerActive = false;
-        state.initReachedZeroAt = 0;
-        lastBreakBeep = -1;
-        beepStart();
-      }
-    } else {
-      // beep last 3s of init countdown
-      const s = Math.ceil(state.initCountdown);
-      if(s <= 3 && s >= 1 && s !== lastBreakBeep) { lastBreakBeep = s; beepShort(); }
+      state.initCountdown = 0;
+      state.phase = 'exercise';
+      state.exerciseStartTime = performance.now();
+      state.exerciseElapsed = 0;
+      state.autoTimerActive = false;
+      state.initReachedZeroAt = 0;
+      beepStart();
     }
   } else if(state.phase === 'exercise') {
     // waiting for user to press stop / next
   } else if(state.phase === 'break') {
+    const prevBreak = state.breakRemain;
     state.breakRemain -= dt;
-    const s = Math.ceil(state.breakRemain);
-    if(s <= 3 && s >= 1 && s !== lastBreakBeep) { lastBreakBeep = s; beepShort(); }
+    beepCountdownBoundaries(prevBreak, state.breakRemain);
     if(state.breakRemain <= 0) {
-      if(!state.breakReachedZeroAt) {
-        // Keep 00 visible for one full second before starting the next set.
-        state.breakRemain = 0;
-        state.breakReachedZeroAt = now;
-      } else if(now - state.breakReachedZeroAt >= 1000) {
-        state.breakRemain = 0;
-        state.phase = 'exercise';
-        state.exerciseStartTime = performance.now();
-        state.autoTimerActive = true;
-        state.breakReachedZeroAt = 0;
-        lastBreakBeep = -1;
-        beepStart();
-      }
+      state.breakRemain = 0;
+      state.phase = 'exercise';
+      state.exerciseStartTime = performance.now();
+      state.exerciseElapsed = 0;
+      state.autoTimerActive = true;
+      state.breakReachedZeroAt = 0;
+      beepStart();
     }
   }
 
@@ -901,14 +910,20 @@ function toggleStartStop() {
       state.nextRepsDelta = 0;
       state.initCountdown = 10;
       state.initReachedZeroAt = 0;
+      state.exerciseElapsed = 0;
       state.phase = 'init';
-      lastBreakBeep = 10;
+    } else if(state.phase === 'exercise') {
+      // Resume exercise without counting paused wall-clock time.
+      state.exerciseStartTime = performance.now();
     }
     state.running = true;
     startTick();
     requestWakeLock();
   } else {
     // Pause from any active phase
+    if(state.phase === 'exercise') {
+      state.exerciseElapsed += (performance.now() - state.exerciseStartTime) / 1000;
+    }
     state.running = false;
   }
   renderAll();
@@ -928,12 +943,12 @@ function finishExercise() {
     breakTime = state.baseBreak * state.currentReps;
   } else {
     // auto: mirror the duration of the set that was just completed
-    const elapsed = (performance.now() - state.exerciseStartTime) / 1000;
+    const elapsed = state.exerciseElapsed + (state.running ? (performance.now() - state.exerciseStartTime) / 1000 : 0);
     breakTime = Number.isFinite(elapsed) && elapsed > 0 ? elapsed : state.currentReps * 3;
   }
   state.breakRemain = Math.max(1, breakTime);
   state.breakReachedZeroAt = 0;
-  lastBreakBeep = -1;
+  state.exerciseElapsed = 0;
 
   // Apply direction change
   state.currentReps = Math.max(1, nextReps);
@@ -956,8 +971,20 @@ function goUp() {
   if(state.phase === 'exercise' && state.running) {
     state.nextRepsDelta = 1;
     finishExercise();
+  } else if(state.phase === 'init') {
+    if(state.initCountdown > 3) {
+      // Jump directly to the final 3-second countdown.
+      state.initCountdown = 3;
+      beepShort();
+    }
+    renderAll();
   } else if(state.phase === 'break') {
-    state.nextRepsDelta = 1;
+    if(state.breakRemain > 3) {
+      // Jump directly to the final 3-second countdown.
+      state.breakRemain = 3;
+      state.breakReachedZeroAt = 0;
+      beepShort();
+    }
     renderAll();
   }
 }
@@ -1082,9 +1109,9 @@ function doReset() {
   state.breakReachedZeroAt = 0;
   state.initCountdown = 10;
   state.initReachedZeroAt = 0;
+  state.exerciseElapsed = 0;
   state.autoTimerActive = false;
   state.lastSetPending = false;
-  lastBreakBeep = -1;
   stopTick();
   renderAll();
 }
